@@ -182,3 +182,31 @@ class MaxPool2d(Layer):
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
+
+
+class Upsample2d(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width,
+                 upsample_height, upsample_width,
+                 n_output,
+                 transfer='identity',
+                 declare=None, name=None):
+
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.upsample_height = upsample_height
+        self.upsample_width = upsample_width
+        self.transfer = transfer
+
+        self.output_height = inpt_height * upsample_height 
+        self.output_width = inpt_width * upsample_width
+
+        self.n_output = n_output
+
+        super(Upsample2d, self).__init__(declare=declare, name=name)
+
+    def _forward(self):
+        self.output_in = T.extra_ops.repeat(T.extra_ops.repeat(self.inpt, upsample_height, axis=2), upsample_width, axis=3)
+        f = lookup(self.transfer, _transfer)
+        self.output = f(self.output_in)
