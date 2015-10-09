@@ -12,6 +12,7 @@ from climin.util import clear_info
 import score as score_
 import report as report_
 
+import signal
 
 class Trainer(object):
     """Class representing a Trainer.
@@ -190,11 +191,15 @@ class Trainer(object):
         The values yielded from this function will be climin info dictionaries
         stripped from any numpy or gnumpy arrays.
         """
+
+        self.CTRL_C_FLAG = False
+        signal.signal(signal.SIGINT, self._ctrl_c_handler)
+        
         start = time.time()
 
         for info in self.model.iter_fit(*fit_data, info_opt=self.current_info):
             interrupt = self.interrupt(info)
-            if self.pause(info) or interrupt:
+            if self.pause(info) or interrupt or self.CTRL_C_FLAG:
                 info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
                 
                 for i in self.info_keys:
@@ -227,7 +232,12 @@ class Trainer(object):
                     break
                 if interrupt:
                     break
+                if self.CTRL_C_FLAG:
+                    break
 
+    def _ctrl_c_handler(self, signal, stack):
+        self.CTRL_C_FLAG = True
+                
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['data']

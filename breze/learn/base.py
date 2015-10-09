@@ -16,7 +16,7 @@ import theano
 import theano.tensor as T
 
 #from climin.util import iter_minibatches2 as iter_minibatches
-# from climin.util import iter_minibatches
+from climin.util import iter_minibatches
 
 GPU = theano.config.device.startswith('gpu')
 if GPU:
@@ -29,7 +29,7 @@ from breze.arch.util import Model
 import random
 import itertools
 
-def iter_minibatches(lst, batch_size, dims, n_cycles=False, random_state=None):
+def _iter_minibatches(lst, batch_size, dims, n_cycles=False, random_state=None):
     """Return an iterator that successively yields tuples containing aligned
     minibatches of size `batch_size` from slicable objects given in `lst`, in
     random order without replacement.
