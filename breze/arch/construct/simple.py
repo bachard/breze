@@ -13,6 +13,7 @@ from breze.arch.util import lookup
 
 from theano.tensor.shared_randomstreams import RandomStreams
 
+
 class AffineNonlinear(Layer):
 
     @property
@@ -157,7 +158,7 @@ class Conv2d(Layer):
             ),
             subsample=self.subsample,
             border_mode=self.border_mode,
-            )
+        )
 
         if self.border_mode == "full":
             self.output_in = self.output_in[:, :, self.output_in_height/2 - self.output_height/2 - 1:self.output_in_height/2 + self.output_height/2, self.output_in_width/2 - self.output_width/2 - 1:self.output_in_width/2 + self.output_width/2]
@@ -167,7 +168,7 @@ class Conv2d(Layer):
 
 
 class MaxPool2d(Layer):
-    
+
     def __init__(self, inpt, inpt_height, inpt_width, pool_height, pool_width,
                  n_output,
                  transfer='identity',
@@ -287,6 +288,33 @@ class LocalResponseNormalization(Layer):
 
 
 class Dropout(Layer):
+    """Class representing a Dropout layer [D] (section 3.3).
+
+    At training time, a unit is kept with probability p.
+    At test time, the weights are multiplied by p, giving the
+    same output as the expected output at training time.
+
+    References
+    ----------
+    .. [D] Hinton, G. E., Srivastava, N., Krizhevsky, A., Sutskever, I.,
+                   & Salakhutdinov, R. R. (2012).
+                   Improving neural networks by preventing co-adaptation
+                   of feature detectors.
+                   arXiv preprint arXiv:1207.0580.
+
+    Attributes
+    ----------
+    training : int
+        whether the network is in training phase
+        set to 0 if not training
+
+    p : int
+        probability of not dropping out a unit
+
+    n : int
+        number of adjacent kernels to sum over
+
+    """
 
     @property
     def training(self):
@@ -299,33 +327,43 @@ class Dropout(Layer):
     def __init__(self, inpt, inpt_height, inpt_width,
                  n_output,
                  rng,
-                 training, # set to 0 if not training
-                 p, # proba of not dropping out
+                 training,
+                 p,
                  transfer='identity',
                  declare=None, name=None):
-        
+
         self.inpt = inpt
         self.inpt_height = inpt_height
         self.inpt_width = inpt_width
 
         self.output_height = self.inpt_height
         self.output_width = self.inpt_width
-        
+
         self.transfer = transfer
-        
+
         self.n_output = n_output
-        
+
         self.srng = RandomStreams(rng.randint(2**32))
         self._training = training
 
         self.p = p
-        
+
         super(Dropout, self).__init__(declare=declare, name=name)
 
     def _forward(self):
-                
-        mask = self.srng.binomial(n=1, p=(1-self.p), size=self.inpt.shape, dtype=theano.config.floatX)
-        self.output_in = T.switch(T.neq(self._training, 0), self.inpt * mask, self.inpt * self.p)
+
+        mask = self.srng.binomial(
+            n=1, p=self.p, size=self.inpt.shape,
+            dtype=theano.config.floatX
+        )
+
+        # if training is different than 0, then we drop out units
+        # else we multiply the weights by p
+        self.output_in = T.switch(
+            T.neq(self._training, 0),
+            self.inpt * mask,
+            self.inpt * self.p
+        )
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
