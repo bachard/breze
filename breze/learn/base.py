@@ -16,8 +16,7 @@ import theano
 import theano.tensor as T
 
 #from climin.util import iter_minibatches2 as iter_minibatches
-from climin.util import iter_minibatches
-
+# from climin.util import iter_minibatches
 
 GPU = theano.config.device.startswith('gpu')
 if GPU:
@@ -25,6 +24,89 @@ if GPU:
 
 
 from breze.arch.util import Model
+
+
+import random
+import itertools
+
+def iter_minibatches(lst, batch_size, dims, n_cycles=False, random_state=None):
+    """Return an iterator that successively yields tuples containing aligned
+    minibatches of size `batch_size` from slicable objects given in `lst`, in
+    random order without replacement.
+
+    Because different containers might require slicing over different
+    dimensions, the dimension of each container has to be givens as a list
+    `dims`.
+
+
+    Parameters
+    ----------
+
+    lst : list of array_like
+        Each item of the list will be sliced into mini batches in alignemnt with
+        the others.
+
+    batch_size : int
+        Size of each batch. Last batch might be smaller.
+
+    dims : list
+        Aligned with ``lst``, gives the dimension along which the data samples
+        are separated.
+
+    n_cycles : int or False, optional [default: False]
+        Number of cycles after which to stop the iterator. If ``False``, will
+        yield forever.
+
+    random_state : a numpy.random.RandomState object, optional [default : None]
+        Random number generator that will act as a seed for the minibatch order
+
+
+    Returns
+    -------
+
+    batches : iterator
+        Infinite iterator of mini batches in random order (without
+        replacement).
+    """
+
+    d = dims[0]
+  
+    if any([len(i) != len(lst[0]) for i in lst]):
+        raise ValueError("containers to be batched have different lengths")
+
+    if d > 2:
+        raise ValueError("cannot slice along this dimension ({})".format(d))
+    
+    # This alternative is to make this work with lists in the case of d == 0.
+    if d == 0:
+        n_batches, rest = divmod(len(lst[0]), batch_size)
+    else:
+        n_batches, rest = divmod(lst[0].shape[d], batch_size)
+    if rest:
+        n_batches += 1
+
+    print(n_batches)
+        
+    counter = itertools.count()
+    if random_state is not None:
+        random.seed(random_state.normal())
+    while True:
+        indices = range(n_batches)
+        while True:
+            random.shuffle(indices)
+            for i in indices:
+                start = i * batch_size
+                end = (i + 1) * batch_size
+                if d == 0:
+                    yield tuple([arr[start:end] for arr in lst])
+                elif d == 1:
+                    yield tuple([arr[:, start:end] for arr in lst])
+                elif d == 2:
+                    yield tuple([arr[:, :, start:end] for arr in lst])
+                
+            count = next(counter)
+            if n_cycles and count >= n_cycles:
+                raise StopIteration()
 
 
 def cast_array_to_local_type(arr):
@@ -248,6 +330,7 @@ class SupervisedModel(Model, BrezeWrapperBase):
 
     def _make_args(self, X, Z, imp_weight=None):
         batch_size = getattr(self, 'batch_size', None)
+        
         if batch_size is None:
             X, Z = cast_array_to_local_type(X), cast_array_to_local_type(Z)
             if imp_weight is not None:
@@ -270,8 +353,9 @@ class SupervisedModel(Model, BrezeWrapperBase):
 
                 data = ((cast_array_to_local_type(x),
                          cast_array_to_local_type(z)) for x, z in data)
-
+                
         args = ((i, {}) for i in data)
+        
         return args
 
     def iter_fit(self, X, Z, imp_weight=None, info_opt=None):
@@ -298,7 +382,9 @@ class SupervisedModel(Model, BrezeWrapperBase):
 
         args = self._make_args(X, Z, imp_weight)
         opt = self._make_optimizer(self._f_loss, self._f_dloss, args, info=info_opt)
-
+        test = args.next()
+        print("args: ", args, test[0][0].shape, test[0][1].shape)
+        print("opt: ", opt)
         for i, info in enumerate(opt):
             yield info
 
