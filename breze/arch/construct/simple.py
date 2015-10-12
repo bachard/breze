@@ -189,6 +189,7 @@ class Upsample2d(Layer):
     def __init__(self, inpt, inpt_height, inpt_width,
                  upsample_height, upsample_width,
                  n_output,
+                 padding=None,
                  transfer='identity',
                  declare=None, name=None):
 
@@ -199,14 +200,47 @@ class Upsample2d(Layer):
         self.upsample_width = upsample_width
         self.transfer = transfer
 
-        self.output_height = inpt_height * upsample_height 
-        self.output_width = inpt_width * upsample_width
+        if padding is None:
+            padding_left = padding_right = padding_top = padding_bottom = 0
+        elif len(padding) == 1:
+            padding_left = padding_right = padding_top = padding_bottom = padding
+        elif len(padding) == 2:
+            padding_left = padding_right = padding[0]
+            padding_top = padding_bottom = padding[1]
+        elif len(padding) == 4:
+            padding_left = padding[0]
+            padding_right = padding[1]
+            padding_top = padding[2]
+            padding_bottom = padding[3]
+        else:
+            raise ValueError("padding is not set properly (either None, int, (int, int), (int, int, int, int))")
+
+        self.output_height = inpt_height * upsample_height + padding_left + padding_right
+        self.output_width = inpt_width * upsample_width + padding_top + padding_bottom
 
         self.n_output = n_output
 
         super(Upsample2d, self).__init__(declare=declare, name=name)
 
     def _forward(self):
-        self.output_in = T.extra_ops.repeat(T.extra_ops.repeat(self.inpt, upsample_height, axis=2), upsample_width, axis=3)
+
+        repeat = T.extra_ops.repeat(
+            T.extra_ops.repeat(self.inpt, upsample_height, axis=2),
+            upsample_width, axis=3
+        )
+
+        n_samples, n_output = self.inpt.shape[0:1]
+
+        self.output_in = T.alloc(0, n_samples, n_output, self.output_height, self.output_width)
+        self.output_in = T.set_subtensor(
+            self.output_in[
+                :,
+                :,
+                padding_top:self.inpt_height * self.upsample_height,
+                padding_left:self.inpt_width * self.upsample_width
+            ],
+            repeat
+        )
+
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
