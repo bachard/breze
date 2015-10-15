@@ -8,6 +8,7 @@ from theano.tensor.nnet import conv
 from theano.tensor.signal import downsample
 from theano.ifelse import ifelse
 from theano.tensor.shared_randomstreams import RandomStreams
+from theano.sandbox import cuda
 
 from breze.arch.component import transfer as _transfer, loss as _loss
 from breze.arch.construct.base import Layer
@@ -428,21 +429,26 @@ class Upsample2d(Layer):
 
     def _forward(self):
 
-        repeat = T.extra_ops.repeat(
-            T.extra_ops.repeat(self.inpt, self.upsample_height, axis=2),
-            self.upsample_width, axis=3
-        )
-
-        self.output_in = T.alloc(0., self.inpt.shape[0], self.inpt.shape[1], self.output_height, self.output_width)
-        self.output_in = T.set_subtensor(
-            self.output_in[
-                :,
-                :,
-                self.padding_top:self.padding_top + self.inpt_height * self.upsample_height,
-                self.padding_left:self.padding_left + self.inpt_width * self.upsample_width
-            ],
-            repeat
-        )
-
+        # repeat = T.extra_ops.repeat(
+        #     T.extra_ops.repeat(self.inpt, self.upsample_height, axis=2),
+        #     self.upsample_width, axis=3
+        # )
+        repeat = self.inpt.repeat(self.upsample_height, axis=2).repeat(self.upsample_width, axis=3)
+        
+        if self.padding_left == 0 and self.padding_top == 0:
+            self.output_in = repeat
+        else:
+            self.output_in = T.alloc(0., self.inpt.shape[0], self.inpt.shape[1], self.output_height, self.output_width)
+            
+            self.output_in = T.set_subtensor(
+                self.output_in[
+                    :,
+                    :,
+                    self.padding_top:self.padding_top + self.inpt_height * self.upsample_height,
+                    self.padding_left:self.padding_left + self.inpt_width * self.upsample_width
+                ],
+                repeat
+            )
+        
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
