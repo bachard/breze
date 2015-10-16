@@ -8,6 +8,7 @@ from theano.tensor.nnet import conv
 from theano.tensor.signal import downsample
 from theano.ifelse import ifelse
 from theano.tensor.shared_randomstreams import RandomStreams
+from theano.tensor.nnet.bn import batch_normalization
 
 from breze.arch.component import transfer as _transfer, loss as _loss
 from breze.arch.construct.base import Layer
@@ -446,3 +447,38 @@ class Upsample2d(Layer):
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
+
+
+class BatchNormalization(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width,
+                 n_output,
+                 transfer='identity',
+                 declare=None, name=None):
+
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.output_height = inpt_height
+        self.output_width = inpt_width
+        self.n_output = n_output
+
+        self.transfer = transfer
+
+        super(BatchNormalization, self).__init__(declare=declare, name=name)
+
+
+        def _forward(self):
+            self.gamma = self.declare(self.inpt.shape)
+            self.beta = self.declare(self.inpt.shape)
+
+            self.mean = self.inpt.mean(axis=0)
+            self.std = self.inpt.std(axis=0)
+
+            self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
+
+            f = lookup(self.transfer, _transfer)
+
+            self.output = f(self.output_in)
+
+            
