@@ -449,10 +449,42 @@ class Upsample2d(Layer):
         self.output = f(self.output_in)
 
 
-class BatchNormalization(Layer):
+class BatchNormalization1d(Layer):
+
+    def __init__(self, inpt, n_inpt,
+                 n_samples,
+                 transfer='identity',
+                 declare=None, name=None):
+
+        self.inpt = inpt
+        self.n_inpt = n_inpt
+        self.n_output = n_inpt
+        self.n_samples = n_samples
+        self.transfer = transfer
+
+        self.epsilon = 1e-6
+
+        super(BatchNormalization1d, self).__init__(declare=declare, name=name)
+
+
+    def _forward(self):
+        self.gamma = self.declare((self.n_samples, self.n_inpt))
+        self.beta = self.declare((self.n_samples, self.n_inpt))
+        
+        self.mean = self.inpt.mean(axis=0)
+        self.std = T.mean((self.inpt - self.mean) ** 2 + self.epsilon, axis=0) ** 0.5
+        
+        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
+        
+        f = lookup(self.transfer, _transfer)
+        
+        self.output = f(self.output_in)
+
+        
+class BatchNormalization2d(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width,
-                 n_output,
+                 n_output, n_samples,
                  transfer='identity',
                  declare=None, name=None):
 
@@ -462,23 +494,25 @@ class BatchNormalization(Layer):
         self.output_height = inpt_height
         self.output_width = inpt_width
         self.n_output = n_output
-
+        self.n_samples = n_samples
         self.transfer = transfer
 
-        super(BatchNormalization, self).__init__(declare=declare, name=name)
+        self.epsilon = 1e-6
+
+        super(BatchNormalization2d, self).__init__(declare=declare, name=name)
 
 
-        def _forward(self):
-            self.gamma = self.declare(self.inpt.shape)
-            self.beta = self.declare(self.inpt.shape)
-
-            self.mean = self.inpt.mean(axis=0)
-            self.std = self.inpt.std(axis=0)
-
-            self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
-
-            f = lookup(self.transfer, _transfer)
-
-            self.output = f(self.output_in)
+    def _forward(self):
+        self.gamma = self.declare((self.n_samples, self.n_output, self.inpt_height, self.inpt_width))
+        self.beta = self.declare((self.n_samples, self.n_output, self.inpt_height, self.inpt_width))
+        
+        self.mean = self.inpt.mean(axis=0)
+        self.std = T.mean((self.inpt - self.mean) ** 2 + self.epsilon, axis=0) ** 0.5
+        
+        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
+        
+        f = lookup(self.transfer, _transfer)
+        
+        self.output = f(self.output_in)
 
             
