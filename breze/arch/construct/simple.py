@@ -9,6 +9,7 @@ from theano.tensor.signal import downsample
 from theano.ifelse import ifelse
 from theano.tensor.shared_randomstreams import RandomStreams
 from theano.tensor.nnet.bn import batch_normalization
+from theano.sandbox import cuda
 
 from breze.arch.component import transfer as _transfer, loss as _loss
 from breze.arch.construct.base import Layer
@@ -402,6 +403,11 @@ class Upsample2d(Layer):
         self.upsample_height = upsample_height
         self.upsample_width = upsample_width
         self.transfer = transfer
+        
+        if upsample_height != upsample_height:
+            raise ValueError("upsample height and upsample width are different, not supported yet")
+
+        self.upsample = upsample_height
 
         if padding is None:
             self.padding_left = self.padding_right = self.padding_top = self.padding_bottom = 0
@@ -429,22 +435,46 @@ class Upsample2d(Layer):
 
     def _forward(self):
 
-        repeat = T.extra_ops.repeat(
-            T.extra_ops.repeat(self.inpt, self.upsample_height, axis=2),
-            self.upsample_width, axis=3
-        )
-
-        self.output_in = T.alloc(0., self.inpt.shape[0], self.inpt.shape[1], self.output_height, self.output_width)
-        self.output_in = T.set_subtensor(
-            self.output_in[
-                :,
-                :,
-                self.padding_top:self.padding_top + self.inpt_height * self.upsample_height,
-                self.padding_left:self.padding_left + self.inpt_width * self.upsample_width
-            ],
-            repeat
-        )
-
+        # repeat = T.extra_ops.repeat(
+        #     T.extra_ops.repeat(self.inpt, self.upsample_height, axis=2),
+        #     self.upsample_width, axis=3
+        # )
+        upsamp = self.inpt.repeat(self.upsample_height, axis=2).repeat(self.upsample_width, axis=3)
+        
+        # inpt_shape = self.inpt.shape
+        # output_shape = (inpt_shape[0], inpt_shape[1], inpt_shape[2] * self.upsample_height, inpt_shape[3] * self.upsample_width)
+        # 
+        # in_dim = inpt_shape[2] * inpt_shape[3]
+        # out_dim = output_shape[2] * output_shape[3]
+        # 
+        # print(in_dim * out_dim)
+        # 
+        # upsamp_matrix = T.alloc(0., in_dim, out_dim)
+        # rows = T.arange(in_dim)
+        # cols = rows * self.upsample + (rows / inpt_shape[2] * self.upsample * inpt_shape[3])
+        # upsamp_matrix = T.set_subtensor(upsamp_matrix[rows, cols], 1.)
+        # 
+        # flat = self.inpt.reshape((inpt_shape[0], inpt_shape[1], inpt_shape[2] * inpt_shape[3]))
+        # 
+        # upsamp_flat = T.dot(flat, upsamp_matrix)
+        # 
+        # upsamp = upsamp_flat.reshape(output_shape)
+        
+        if self.padding_left == 0 and self.padding_top == 0:
+            self.output_in = upsamp
+        else:
+            self.output_in = T.alloc(0., self.inpt.shape[0], self.inpt.shape[1], self.output_height, self.output_width)
+            
+            self.output_in = T.set_subtensor(
+                self.output_in[
+                    :,
+                    :,
+                    self.padding_top:self.padding_top + self.inpt_height * self.upsample_height,
+                    self.padding_left:self.padding_left + self.inpt_width * self.upsample_width
+                ],
+                upsamp
+            )
+        
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
 
