@@ -15,6 +15,8 @@ from breze.arch.component import transfer as _transfer, loss as _loss
 from breze.arch.construct.base import Layer
 from breze.arch.util import lookup
 
+import numpy
+
 class AffineNonlinear(Layer):
 
     @property
@@ -481,8 +483,18 @@ class Upsample2d(Layer):
 
 class BatchNormalization1d(Layer):
 
+    @property
+    def training(self):
+        return self._training
+
+    @training.setter
+    def training(self, training):
+        self._training = training
+    
     def __init__(self, inpt, n_inpt,
                  n_samples,
+                 alpha=0.3,
+                 training=1,
                  transfer='identity',
                  declare=None, name=None):
 
@@ -492,29 +504,71 @@ class BatchNormalization1d(Layer):
         self.n_samples = n_samples
         self.transfer = transfer
 
-        self.epsilon = 1e-6
+        if alpha < 0 or alpha > 1:
+            raise ValueError("alpha must be between O and 1")
 
+        self.alpha = alpha
+
+        self._training = training
+        
+        self.epsilon = 1e-6
+        
         super(BatchNormalization1d, self).__init__(declare=declare, name=name)
 
 
     def _forward(self):
-        self.gamma = self.declare((self.n_samples, self.n_inpt))
-        self.beta = self.declare((self.n_samples, self.n_inpt))
+
+        self.gamma = self.declare((self.n_inpt,))
+        self.beta = self.declare((self.n_inpt,))
+
+        self.mean = theano.shared(numpy.zeros((self.n_inpt,), dtype=theano.config.floatX), "mean")
+        self.std = theano.shared(numpy.ones((self.n_inpt,), dtype=theano.config.floatX), "std")
         
-        self.mean = self.inpt.mean(axis=0)
-        self.std = T.mean((self.inpt - self.mean) ** 2 + self.epsilon, axis=0) ** 0.5
+        mean = ifelse(
+            self.training,
+            self.inpt.mean(axis=0),
+            self.mean
+        )
         
-        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
+        std = ifelse(
+            self.training,
+            self.inpt.std(axis=0) + self.epsilon,
+            self.std
+        )
+
+        self.mean.default_update = ifelse(
+            self.training,
+            self.alpha*mean + (1 - self.alpha)*self.mean,
+            self.mean
+        )
+        
+        self.std.default_update = ifelse(
+            self.training,
+            self.alpha*std + (1 - self.alpha)*self.std,
+            self.std
+        )
+        
+        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, mean, std, "low_mem")
         
         f = lookup(self.transfer, _transfer)
         
         self.output = f(self.output_in)
 
-        
+
 class BatchNormalization2d(Layer):
 
+    @property
+    def training(self):
+        return self._training
+
+    @training.setter
+    def training(self, training):
+        self._training = training
+    
     def __init__(self, inpt, inpt_height, inpt_width,
                  n_output, n_samples,
+                 alpha=0.3,
+                 training=1,
                  transfer='identity',
                  declare=None, name=None):
 
@@ -527,22 +581,62 @@ class BatchNormalization2d(Layer):
         self.n_samples = n_samples
         self.transfer = transfer
 
-        self.epsilon = 1e-6
+        if alpha < 0 or alpha > 1:
+            raise ValueError("alpha must be between O and 1")
 
+        self.alpha = alpha
+
+        self._training = training
+        
+        self.epsilon = 1e-6
+        
         super(BatchNormalization2d, self).__init__(declare=declare, name=name)
 
 
     def _forward(self):
-        self.gamma = self.declare((self.n_samples, self.n_output, self.inpt_height, self.inpt_width))
-        self.beta = self.declare((self.n_samples, self.n_output, self.inpt_height, self.inpt_width))
+
+        self.gamma = self.declare((1, self.n_output, 1, 1))
+        self.beta = self.declare((1, self.n_output, 1, 1))
+
+        self.mean = theano.shared(numpy.zeros((1, self.n_output, 1, 1), dtype=theano.config.floatX), "mean")
+        self.std = theano.shared(numpy.ones((1, self.n_output, 1, 1), dtype=theano.config.floatX), "std")
+
+        axes=(0, 2, 3)
         
-        self.mean = self.inpt.mean(axis=0)
-        self.std = T.mean((self.inpt - self.mean) ** 2 + self.epsilon, axis=0) ** 0.5
+        mean = ifelse(
+            self.training,
+            # unbroadcast is necessary otherwise it would not be
+            # of the same type as self.mean
+            T.unbroadcast(self.inpt.mean(axis=axes, keepdims=True), *axes),
+            self.mean
+        )
         
-        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, self.mean, self.std, "low_mem")
+        std = ifelse(
+            self.training,
+            # unbroadcast is necessary otherwise it would not be
+            # of the same type as self.std
+            T.unbroadcast(self.inpt.std(axis=axes, keepdims=True), *axes) + self.epsilon,
+            self.std
+        )
+
+        self.mean.default_update = ifelse(
+            self.training,
+            self.alpha*mean + (1 - self.alpha)*self.mean,
+            self.mean
+        )
+        
+        self.std.default_update = ifelse(
+            self.training,
+            self.alpha*std + (1 - self.alpha)*self.std,
+            self.std
+        )
+
+        # the axes should be broadcastable for computation
+        mean = T.addbroadcast(mean, *axes)
+        std = T.addbroadcast(std, *axes)
+                
+        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, mean, std, "low_mem")
         
         f = lookup(self.transfer, _transfer)
         
         self.output = f(self.output_in)
-
-            
