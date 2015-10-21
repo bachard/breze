@@ -607,7 +607,7 @@ class BatchNormalization2d(Layer):
             self.training,
             # unbroadcast is necessary otherwise it would not be
             # of the same type as self.mean
-            T.unbroadcast(self.inpt.mean(axis=axes, keepdims=True), *axes),
+            T.unbroadcast(self.inpt.mean(axis=axes, keepdims=True), *(0, 1, 2, 3)),
             self.mean
         )
         
@@ -615,7 +615,7 @@ class BatchNormalization2d(Layer):
             self.training,
             # unbroadcast is necessary otherwise it would not be
             # of the same type as self.std
-            T.unbroadcast(self.inpt.std(axis=axes, keepdims=True), *axes) + self.epsilon,
+            T.unbroadcast(self.inpt.std(axis=axes, keepdims=True), *(0, 1, 2, 3)) + self.epsilon,
             self.std
         )
 
