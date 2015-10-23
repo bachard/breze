@@ -97,7 +97,7 @@ class Trainer(object):
     """
 
     def __init__(self, model, data, stop, score=score_.simple,
-                 pause=always, interrupt=never, report=report_.point_print):
+                 pause=always, interrupt=never, report=report_.point_print, info_opt=None):
         """Create a Trainer object.
 
         Parameters
@@ -144,7 +144,7 @@ class Trainer(object):
         self.runtime = 0
 
         self.infos = []
-        self.current_info = None
+        self.current_info = info_opt
 
         self.val_key = 'val' # None, set from outside?
         self.info_keys = []
@@ -194,14 +194,14 @@ class Trainer(object):
 
         self.CTRL_C_FLAG = False
         signal.signal(signal.SIGINT, self._ctrl_c_handler)
-        
+
         start = time.time()
 
         for info in self.model.iter_fit(*fit_data, info_opt=self.current_info):
             interrupt = self.interrupt(info)
             if self.pause(info) or interrupt or self.CTRL_C_FLAG:
                 info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
-                
+
                 for i in self.info_keys:
                     info['{}_loss'.format(i)] = ma.scalar(
                         self.score(*self.data[i])
@@ -237,7 +237,7 @@ class Trainer(object):
 
     def _ctrl_c_handler(self, signal, stack):
         self.CTRL_C_FLAG = True
-                
+
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['data']

@@ -128,9 +128,11 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
         Hs, Ws = tile_spacing
 
         # generate a matrix to store the output
-        dt = X.dtype
         if output_pixel_vals:
             dt = 'uint8'
+        else:
+            dt = X.dtype
+
         out_array = np.zeros(out_shape, dtype=dt)
 
         for tile_row in xrange(tile_shape[0]):
