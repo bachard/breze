@@ -506,7 +506,7 @@ class BatchNormalization1d(Layer):
         self.transfer = transfer
 
         if alpha < 0 or alpha > 1:
-            raise ValueError("alpha must be between O and 1")
+            raise ValueError("alpha must be between 0 and 1")
 
         self.alpha = alpha
 
@@ -526,25 +526,25 @@ class BatchNormalization1d(Layer):
         self.std = theano.shared(numpy.ones((self.n_inpt,), dtype=theano.config.floatX), "std")
 
         mean = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.inpt.mean(axis=0),
             self.mean
         )
 
         std = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.inpt.std(axis=0) + self.epsilon,
             self.std
         )
 
         self.mean.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.alpha*mean + (1 - self.alpha)*self.mean,
             self.mean
         )
 
         self.std.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.alpha*std + (1 - self.alpha)*self.std,
             self.std
         )
@@ -649,26 +649,26 @@ class BatchNormalization(Layer):
         )
 
         mean = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.inpt.mean(axis=0),
             self.mean
         )
 
         std = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             self.inpt.std(axis=0) + self.num_stability_cst,
             self.std
         )
 
         self.mean.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             (self.weighting_decrease*mean
              + (1 - self.weighting_decrease)*self.mean),
             self.mean
         )
 
         self.std.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             (self.weighting_decrease*std
              + (1 - self.weighting_decrease)*self.std),
             self.std
@@ -737,7 +737,7 @@ class BatchNormalization2d(Layer):
 
     @training.setter
     def training(self, training):
-        self._training = training
+        self._training.set_value(training)
 
     def __init__(self, inpt, inpt_height, inpt_width,
                  n_output, n_samples,
@@ -760,7 +760,7 @@ class BatchNormalization2d(Layer):
 
         self.weighting_decrease = weighting_decrease
 
-        self._training = training
+        self._training = theano.shared(training)
 
         self.num_stability_cst = 1e-6
 
@@ -783,7 +783,7 @@ class BatchNormalization2d(Layer):
         axes = (0, 2, 3)
 
         mean = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             # unbroadcast is necessary otherwise it would not be
             # of the same type as self.mean
             T.unbroadcast(
@@ -794,7 +794,7 @@ class BatchNormalization2d(Layer):
         )
 
         std = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             # unbroadcast is necessary otherwise it would not be
             # of the same type as self.std
             T.unbroadcast(
@@ -805,14 +805,14 @@ class BatchNormalization2d(Layer):
         )
 
         self.mean.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             (self.weighting_decrease*mean
              + (1 - self.weighting_decrease)*self.mean),
             self.mean
         )
 
         self.std.default_update = ifelse(
-            self.training,
+            T.gt(self.training, 0),
             (self.weighting_decrease*std
              + (1 - self.weighting_decrease)*self.std),
             self.std
