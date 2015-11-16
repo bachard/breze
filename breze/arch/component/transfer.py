@@ -92,7 +92,7 @@ def rectifier(inpt):
     output : Theano variable
         Transformed output. Same shape as ``inpt``.
     """
-    return T.maximum(inpt, 0)
+    return T.nnet.relu(inpt)
 
 
 def softplus(inpt):
