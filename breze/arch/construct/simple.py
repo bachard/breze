@@ -757,3 +757,33 @@ class BatchNormalization2d(Layer):
         f = lookup(self.transfer, _transfer)
 
         self.output = f(self.output_in)
+
+
+
+class ParametricReLu(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width, n_channel,
+                 shared=False,
+                 declare=None, name=None)
+                 
+        self.n_channel = n_channel
+        
+        self.output_height = inpt_height
+        self.output_width = inpt_width
+        self.n_output = n_channel
+
+        self.shared = shared
+
+        super(ParametricReLu, self).__init__(declare=declare, name=name)
+
+
+    def _forward(self):
+
+        shape = (1, 1, 1, 1) if self.shared else (1, self.n_channel, 1, 1)
+        shared_axes = (0, 1, 2, 3) if self.shared else (0, 2, 3)
+        
+        self.alpha = self.declare(shape)
+
+        alpha = T.addbroadcast(self.alpha, *shared_axes)
+
+        self.output = T.nnet.relu(self.inpt, alpha)
