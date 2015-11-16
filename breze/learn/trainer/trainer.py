@@ -146,6 +146,8 @@ class Trainer(object):
         self.infos = []
         self.current_info = info_opt
 
+        self.train_losses = []
+
         self.val_key = 'val' # None, set from outside?
         self.info_keys = []
 
@@ -198,14 +200,24 @@ class Trainer(object):
         start = time.time()
 
         for info in self.model.iter_fit(*fit_data, info_opt=self.current_info):
+            if "cur_batch" in self.info_keys:
+                self.model.training = 0
+                self.train_losses.append(ma.scalar(self.score(*info["args"])))
+                self.model.training = 1
+
             interrupt = self.interrupt(info)
             if self.pause(info) or interrupt or self.CTRL_C_FLAG:
+                self.model.training = 0
                 info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
 
                 for i in self.info_keys:
-                    info['{}_loss'.format(i)] = ma.scalar(
-                        self.score(*self.data[i])
-                    )
+                    if i == "cur_batch":
+                        info["train_loss"] = self.train_losses
+                        self.train_losses = []
+                    else:
+                        info['{}_loss'.format(i)] = ma.scalar(
+                            self.score(*self.data[i])
+                        )
 
                 cur_val_loss = info['%s_loss' % self.val_key]
                 if cur_val_loss < self.best_loss:
@@ -219,10 +231,11 @@ class Trainer(object):
                     'datetime': datetime.datetime.now(),
                     'runtime': self.runtime
                 })
+                self.model.training = 1
+                # filtered_info = clear_info(info)
+                filtered_info = info
 
-                filtered_info = clear_info(info)
-
-                self.infos.append(filtered_info)
+                # self.infos.append(filtered_info)
                 self.current_info = info
                 yield filtered_info
                 start = time.time()
