@@ -482,80 +482,6 @@ class Upsample2d(Layer):
         self.output = f(self.output_in)
 
 
-class BatchNormalization1d(Layer):
-
-    @property
-    def training(self):
-        return self._training
-
-    @training.setter
-    def training(self, training):
-        self._training = training
-
-    def __init__(self, inpt, n_inpt,
-                 n_samples,
-                 alpha=0.3,
-                 training=1,
-                 transfer='identity',
-                 declare=None, name=None):
-
-        self.inpt = inpt
-        self.n_inpt = n_inpt
-        self.n_output = n_inpt
-        self.n_samples = n_samples
-        self.transfer = transfer
-
-        if alpha < 0 or alpha > 1:
-            raise ValueError("alpha must be between 0 and 1")
-
-        self.alpha = alpha
-
-        self._training = training
-
-        self.epsilon = 1e-6
-
-        super(BatchNormalization1d, self).__init__(declare=declare, name=name)
-
-
-    def _forward(self):
-
-        self.gamma = self.declare((self.n_inpt,))
-        self.beta = self.declare((self.n_inpt,))
-
-        self.mean = theano.shared(numpy.zeros((self.n_inpt,), dtype=theano.config.floatX), "mean")
-        self.std = theano.shared(numpy.ones((self.n_inpt,), dtype=theano.config.floatX), "std")
-
-        mean = ifelse(
-            T.gt(self.training, 0),
-            self.inpt.mean(axis=0),
-            self.mean
-        )
-
-        std = ifelse(
-            T.gt(self.training, 0),
-            self.inpt.std(axis=0) + self.epsilon,
-            self.std
-        )
-
-        self.mean.default_update = ifelse(
-            T.gt(self.training, 0),
-            self.alpha*mean + (1 - self.alpha)*self.mean,
-            self.mean
-        )
-
-        self.std.default_update = ifelse(
-            T.gt(self.training, 0),
-            self.alpha*std + (1 - self.alpha)*self.std,
-            self.std
-        )
-
-        self.output_in = batch_normalization(self.inpt, self.gamma, self.beta, mean, std, "low_mem")
-
-        f = lookup(self.transfer, _transfer)
-
-        self.output = f(self.output_in)
-
-
 class BatchNormalization(Layer):
     """Class implementing Batch Normalization (BN) [D] adapted to fully
     connected layers.
@@ -834,3 +760,33 @@ class BatchNormalization2d(Layer):
         f = lookup(self.transfer, _transfer)
 
         self.output = f(self.output_in)
+
+
+
+class ParametricReLu(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width, n_channel,
+                 shared=False,
+                 declare=None, name=None)
+
+        self.n_channel = n_channel
+
+        self.output_height = inpt_height
+        self.output_width = inpt_width
+        self.n_output = n_channel
+
+        self.shared = shared
+
+        super(ParametricReLu, self).__init__(declare=declare, name=name)
+
+
+    def _forward(self):
+
+        shape = (1, 1, 1, 1) if self.shared else (1, self.n_channel, 1, 1)
+        shared_axes = (0, 1, 2, 3) if self.shared else (0, 2, 3)
+
+        self.alpha = self.declare(shape)
+
+        alpha = T.addbroadcast(self.alpha, *shared_axes)
+
+        self.output = T.nnet.relu(self.inpt, alpha)
