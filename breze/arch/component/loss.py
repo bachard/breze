@@ -95,6 +95,29 @@ def squared(target, prediction):
     return (target - prediction) ** 2
 
 
+def binary_hinge_loss(target, prediction):
+    """Return the binary hinge loss between the ``target`` and
+    the ``prediction``.
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of arbitrary shape representing representing the targets.
+
+    prediction : Theano variable
+        An array of arbitrary shape representing representing the predictions.
+
+    Returns
+    -------
+
+    res : Theano variable
+        An array of the same shape as ``target`` and ``prediction``
+        representing the binary hinge loss."""
+    target = 2 * target - 1
+    return T.nnet.relu(1 - prediction * target)
+
+
 def absolute(target, prediction):
     """Return the element wise absolute difference between the ``target`` and
     the ``prediction``.
@@ -115,6 +138,34 @@ def absolute(target, prediction):
         An array of the same shape as ``target`` and ``prediction``
         representing the pairwise distances."""
     return abs(target - prediction)
+
+
+
+def bin_ce(target, prediction, eps=1e-8):
+    """Return the binary cross entropy between the ``target`` and the ``prediction``,
+    where ``prediction`` is a summary of the statistics of a categorial
+    distribution and ``target`` is a some outcome.
+
+    Used for binary classification purposes.
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of shape ``(n, )`` where ``n`` is the number of samples.
+
+    prediction : Theano variable
+        An array of shape ``(n, )``.
+
+    Returns
+    -------
+
+    res : Theano variable.
+        An array of the same size as ``target`` and ``prediction`` representing
+        the pairwise divergences."""
+    prediction = T.clip(prediction, eps, 1 - eps)
+    return T.nnet.binary_crossentropy(prediction, target)
+
 
 
 def cat_ce(target, prediction, eps=1e-8):
