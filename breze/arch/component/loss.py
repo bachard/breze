@@ -95,6 +95,83 @@ def squared(target, prediction):
     return (target - prediction) ** 2
 
 
+def _modified_hausdorff_distance_matrix(target, prediction):
+    """Return the Modified Hausdorff Distance between the `target` and
+    the `predicition`.
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of shape (height, width) representing the target,
+    where each point encodes the x and y coordinates and the value the z coordinate.
+
+    prediction : Theano variable
+        An array of shape (height, width) representing the target,
+    where each point encodes the x and y coordinates and the value the z coordinate.
+
+    Returns
+    -------
+
+    res : Theano variable
+        A float representing the MHD between the target and the prediction
+    """
+    indices = T.nonzero(target > 0)
+    values = target[indices].reshape((-1, 1))
+    indices = T.stack(indices, axis=1)
+    target = T.concatenate((indices, values), axis=1)
+
+    indices = T.nonzero(prediction > 0)
+    values = prediction[indices].reshape((-1, 1))
+    indices = T.stack(indices, axis=1)
+    prediction = T.concatenate((indices, values), axis=1)
+
+    prediction_sum_square = T.sum(prediction ** 2, axis=1, keepdims=True)
+    target_sum_square = T.sum(target ** 2, axis=1, keepdims=True)
+
+    dot_prod = T.dot(prediction, target.T)
+
+    distances = T.sqrt(prediction_sum_square + target_sum_square.T - 2 * dot_prod)
+    
+    g_yz = distances.min(axis=1).mean()
+    g_zy = distances.min(axis=0).mean()
+
+    mhd = T.min([g_yz, g_zy])
+
+    return mhd
+
+
+def modified_hausdorff_distance(target, predicition):
+    """Return the Modified Hausdorff Distance between the `target` and
+    the `predicition`.
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of shape (n_samples, height, width) representing the target,
+    where each point encodes the x and y coordinates and the value the z coordinate.
+
+    prediction : Theano variable
+        An array of shape (n_samples, height, width) representing the target,
+    where each point encodes the x and y coordinates and the value the z coordinate.
+
+    Returns
+    -------
+
+    res : Theano variable
+        An array of shape (n_samples, ) representing the MHD between the 
+    target and the prediction
+    """
+
+    distances, updates = theano.map(
+        _modified_hausdorff_distance_matrix,
+        [prediction, target]
+    )
+
+    return distances
+    
+
 def binary_hinge_loss(target, prediction):
     """Return the binary hinge loss between the ``target`` and
     the ``prediction``.
