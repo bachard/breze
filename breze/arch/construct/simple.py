@@ -178,9 +178,9 @@ class Conv2d(Layer):
             self.output_in = self.output_in[
                 :,
                 :,
-                self.output_in_height/2 - self.output_height/2 - 1:
+                self.output_in_height/2 - self.output_height/2:
                 self.output_in_height/2 + self.output_height/2,
-                self.output_in_width/2 - self.output_width/2 - 1:
+                self.output_in_width/2 - self.output_width/2:
                 self.output_in_width/2 + self.output_width/2
             ]
 
@@ -767,8 +767,11 @@ class ParametricReLu(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width, n_channel,
                  shared=False,
-                 declare=None, name=None)
+                 declare=None, name=None):
 
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
         self.n_channel = n_channel
 
         self.output_height = inpt_height
