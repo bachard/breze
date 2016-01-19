@@ -137,16 +137,14 @@ class Conv2d(Layer):
 
         # to use padding:
         # we should either pad the input before the convolution
-        # and then use "valid" mode
-        # or use "full" mode and then slice the output (what is done here)
+        # and then use "valid" mode (what is done here)
+        # or use "full" mode and then slice the output
         if padding[0] > 0:
-            self.border_mode = "full"
-            self.output_in_height = ((inpt_height - filter_height +
-                                      2*(filter_height - 1)) /
-                                     subsample[0] + 1)
-            self.output_in_width = ((inpt_width - filter_width +
-                                     2*(filter_width - 1)) /
-                                    subsample[1] + 1)
+            self.inpt_height = inpt_height + 2*padding[0]
+            self.inpt_width = inpt_width + 2*padding[1]
+            inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width) 
+            self.inpt = T.alloc(0., *inpt_shape)
+            self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
 
         if not self.output_height > 0:
             raise ValueError('inpt height smaller than filter height')
@@ -173,17 +171,7 @@ class Conv2d(Layer):
             subsample=self.subsample,
             border_mode=self.border_mode,
         )
-
-        if self.border_mode == "full":
-            self.output_in = self.output_in[
-                :,
-                :,
-                self.output_in_height/2 - self.output_height/2 - 1:
-                self.output_in_height/2 + self.output_height/2,
-                self.output_in_width/2 - self.output_width/2 - 1:
-                self.output_in_width/2 + self.output_width/2
-            ]
-
+        
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
 
@@ -194,19 +182,25 @@ class MaxPool2d(Layer):
                  n_output,
                  transfer='identity',
                  st=None,
+                 padding=(0, 0),
+                 mode="max",
                  declare=None, name=None):
         self.inpt = inpt
         self.inpt_height = inpt_height
         self.inpt_width = inpt_width
         self.pool_height = pool_height
         self.pool_width = pool_width
+        self.padding = padding
         if st is None:
             st = (pool_height, pool_width)
         self.st = st  # stride
+        self.mode = mode
+        if self.mode == "avg":
+            self.mode = "average_exc_pad"
         self.transfer = transfer
 
-        self.output_height = (inpt_height - pool_height) / st[0] + 1
-        self.output_width = (inpt_width - pool_width) / st[1] + 1
+        self.output_height = (inpt_height - pool_height + 2 * padding[0]) / st[0] + 1
+        self.output_width = (inpt_width - pool_width + 2 * padding[1]) / st[1] + 1
 
         if not self.output_height > 0:
             raise ValueError('inpt height smaller than pool height')
@@ -222,11 +216,14 @@ class MaxPool2d(Layer):
             input=self.inpt,
             ds=(self.pool_height, self.pool_width),
             st=self.st,
-            ignore_border=True
+            padding=self.padding,
+            ignore_border=True,
+            mode=self.mode
         )
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
+
 
 
 class LocalResponseNormalization(Layer):
@@ -770,7 +767,6 @@ class ParametricReLu(Layer):
                  declare=None, name=None):
 
         self.inpt = inpt
-        
         self.n_channel = n_channel
 
         self.output_height = inpt_height
