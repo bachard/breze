@@ -196,7 +196,11 @@ class MaxPool2d(Layer):
         self.st = st  # stride
         self.mode = mode
         if self.mode == "avg":
-            self.mode = "average_exc_pad"
+            if padding == (0, 0):
+                self.mode = "average_exc_pad"
+            else:
+                self.mode = "average_inc_pad"
+                
         self.transfer = transfer
 
         self.output_height = (inpt_height - pool_height + 2 * padding[0]) / st[0] + 1
