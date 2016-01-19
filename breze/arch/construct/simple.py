@@ -767,8 +767,10 @@ class ParametricReLu(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width, n_channel,
                  shared=False,
-                 declare=None, name=None)
+                 declare=None, name=None):
 
+        self.inpt = inpt
+        
         self.n_channel = n_channel
 
         self.output_height = inpt_height
