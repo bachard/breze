@@ -95,6 +95,83 @@ def squared(target, prediction):
     return (target - prediction) ** 2
 
 
+def _closest_pair_distance_vector(target, prediction):
+    """Return the closest pair distance between the `target` and
+    the `predicition`.
+
+    Closest pair loss
+    target:     {(x_i^a, y_i^a, z_i^a, x_i^b, y_i^b, z_i^b), i \in {1, ..., n}} = {(p_i, q_i), i \in {1, ..., n}}
+    prediction: (X^a, Y^a, Z^a, X^b, Y^b, Z^b) = (P, Q)
+    loss:       \min_i {d((x_i^a, y_i^a, z_i^a), (X^a, Y^a, Z^a)) + d((x_i^b, y_i^b, z_i^b), (X^b, Y^b, Z^b))}
+              = \min_i {d(p_i, P) + d(q_i, Q)}
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of shape (n, 6) representing the target,
+    where each entry is a pair of 3-d points
+
+    prediction : Theano variable
+        An array of shape (6, ) representing the prediction,
+    a pair of 3-d points
+
+    Returns
+    -------
+
+    res : Theano variable
+        A float representing the closest pair loss between the target and the prediction
+    """
+
+    prediction_a_sum_square = T.sum(prediction[:3] ** 2, axis=0, keepdims=True)
+    prediction_b_sum_square = T.sum(prediction[3:] ** 2, axis=0, keepdims=True)
+    target_a_sum_square = T.sum(target[:, :3] ** 2, axis=1, keepdims=True)
+    target_b_sum_square = T.sum(target[:, 3:] ** 2, axis=1, keepdims=True)
+    
+    P_a = T.dot(prediction[:3], target[:, :3].T)
+    P_b = T.dot(prediction[3:], target[:, 3:].T)
+    
+    D_a = T.sqrt(prediction_a_sum_square + target_a_sum_square.T - 2 * P_a)
+    D_b = T.sqrt(prediction_b_sum_square + target_b_sum_square.T - 2 * P_b)
+    D = D_a + D_b
+    
+    loss = D.min()
+    
+    return loss
+
+
+def closest_pair_loss(target, predicition):
+    """Return the closest pair distance  between the `target` and
+    the `predicition`.
+    See definition above
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An array of shape (n_samples, n, 6) representing the target,
+    where each entry is a pair of 3-d points
+
+    prediction : Theano variable
+        An array of shape (n_samples, 6) representing the prediction,
+    a pair of 3-d points
+
+    Returns
+    -------
+
+    res : Theano variable
+        An array of shape (n_samples, ) representing the closest pair
+    loss between the target and the prediction
+    """
+
+    distances, updates = theano.map(
+        _closest_pair_distance_vector,
+        [prediction, target]
+    )
+
+    return distances
+
+
 def _modified_hausdorff_distance_matrix(target, prediction):
     """Return the Modified Hausdorff Distance between the `target` and
     the `predicition`.
@@ -132,7 +209,7 @@ def _modified_hausdorff_distance_matrix(target, prediction):
     dot_prod = T.dot(prediction, target.T)
 
     distances = T.sqrt(prediction_sum_square + target_sum_square.T - 2 * dot_prod)
-    
+
     g_yz = distances.min(axis=1).mean()
     g_zy = distances.min(axis=0).mean()
 
