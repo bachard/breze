@@ -33,7 +33,7 @@ These are not valid::
 For some examples, consult the source code of this module.
 """
 
-
+import theano
 import theano.tensor as T
 
 from misc import distance_matrix
@@ -123,6 +123,9 @@ def _closest_pair_distance_vector(target, prediction):
         A float representing the closest pair loss between the target and the prediction
     """
 
+    # filter target entries
+    target = target[T.nonzero(T.gt(target, -1))].reshape((-1, 6))
+    
     prediction_a_sum_square = T.sum(prediction[:3] ** 2, axis=0, keepdims=True)
     prediction_b_sum_square = T.sum(prediction[3:] ** 2, axis=0, keepdims=True)
     target_a_sum_square = T.sum(target[:, :3] ** 2, axis=1, keepdims=True)
@@ -140,7 +143,7 @@ def _closest_pair_distance_vector(target, prediction):
     return loss
 
 
-def closest_pair_loss(target, predicition):
+def closest_pair_distance(target, prediction):
     """Return the closest pair distance  between the `target` and
     the `predicition`.
     See definition above
@@ -166,10 +169,10 @@ def closest_pair_loss(target, predicition):
 
     distances, updates = theano.map(
         _closest_pair_distance_vector,
-        [prediction, target]
+        [target, prediction]
     )
 
-    return distances
+    return distances.reshape((-1, 1))
 
 
 def _modified_hausdorff_distance_matrix(target, prediction):
@@ -218,7 +221,7 @@ def _modified_hausdorff_distance_matrix(target, prediction):
     return mhd
 
 
-def modified_hausdorff_distance(target, predicition):
+def modified_hausdorff_distance(target, prediction):
     """Return the Modified Hausdorff Distance between the `target` and
     the `predicition`.
 
@@ -243,10 +246,10 @@ def modified_hausdorff_distance(target, predicition):
 
     distances, updates = theano.map(
         _modified_hausdorff_distance_matrix,
-        [prediction, target]
+        [target, prediction]
     )
 
-    return distances
+    return distances.reshape((-1, 1))
     
 
 def binary_hinge_loss(target, prediction):
