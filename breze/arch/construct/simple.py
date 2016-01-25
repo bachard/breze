@@ -773,7 +773,7 @@ class ParametricReLu(Layer):
         self.inpt = inpt
         self.inpt_height = inpt_height
         self.inpt_width = inpt_width
-        
+
         self.n_channel = n_channel
 
         self.output_height = inpt_height
