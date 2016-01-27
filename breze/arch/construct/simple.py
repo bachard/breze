@@ -519,10 +519,12 @@ class Deconv2d(Layer):
             self.n_inpt, self.n_output,
             self.filter_height, self.filter_width))
 
-        image_shape = (self.n_samples, self.n_output, self.output_height, self.output_width)
-        output_in_height = ((self.output_height - self.filter_height + 2*(self.filter_height - 1)) / self.stride[0] + 1)
-        output_in_width = ((self.output_width - self.filter_width + 2*(self.filter_width - 1)) / self.stride[1] + 1)
-
+        image_height = self.filter_height + self.stride[0] * (self.inpt_height - 1)
+        image_width = self.filter_width + self.stride[1] * (self.inpt_width - 1)
+        image_shape = (self.n_samples, self.n_output, image_height, image_width)
+        # output_in_height = ((self.output_height - self.filter_height + 2*(self.filter_height - 1)) / self.stride[0] + 1)
+        # output_in_width = ((self.output_width - self.filter_width + 2*(self.filter_width - 1)) / self.stride[1] + 1)
+        
         image = T.alloc(0., *image_shape)
         output_in = T.nnet.conv.conv2d(
             image,
@@ -530,19 +532,21 @@ class Deconv2d(Layer):
             image_shape=image_shape,
             filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
             subsample=self.stride,
-            border_mode="full"
+            border_mode="valid"
         )
-
-        output = output_in[
-            :,
-            :,
-            output_in_height/2 - self.inpt_height/2:
-            output_in_height/2 + self.inpt_height/2 + self.inpt_height%2,
-            output_in_width/2 - self.inpt_width/2:
-            output_in_width/2 + self.inpt_width/2 + self.inpt_width%2
-        ]
-
-        self.output_in = theano.grad(output.sum(), wrt=image, known_grads={output: self.inpt})
+        
+        # output = output_in[
+        #     :,
+        #     :,
+        #     output_in_height/2 - self.inpt_height/2:
+        #     output_in_height/2 + self.inpt_height/2 + self.inpt_height%2,
+        #     output_in_width/2 - self.inpt_width/2:
+        #     output_in_width/2 + self.inpt_width/2 + self.inpt_width%2
+        # ]
+        
+        self.output_in = theano.grad(output_in.sum(), wrt=image, known_grads={output_in: self.inpt})
+        if self.padding[0] > 0 and self.padding[1] > 0:
+            self.output_in = self.output_in[:, :, self.padding[0]:-self.padding[0], self.padding[1]:-self.padding[1]]
         
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
