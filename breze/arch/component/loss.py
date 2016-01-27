@@ -712,3 +712,19 @@ def drlim(push_margin, pull_margin, c_contrastive,
 
 
 drlim1 = drlim(1, 0, 0.5)
+
+
+def ebm_loss(pull_margin, push_margin, c_contrastive):
+
+    def inner(target, distance):
+        
+        pull = target * T.sqr(T.maximum(0, pull_margin - distance))
+        push = (1 - target) * T.sqr(distance)
+
+        loss = pull + c_contrastive * push
+        return loss.reshape((-1, 1))
+
+    return inner
+
+
+ebm_loss1 = ebm_loss(1, 0, 0.5)
