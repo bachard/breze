@@ -526,15 +526,24 @@ class Deconv2d(Layer):
         # output_in_width = ((self.output_width - self.filter_width + 2*(self.filter_width - 1)) / self.stride[1] + 1)
         
         image = T.alloc(0., *image_shape)
-        output_in = T.nnet.conv.conv2d(
+        # output_in = T.nnet.conv.conv2d(
+        #     image,
+        #     self.weights,
+        #     image_shape=image_shape,
+        #     filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
+        #     subsample=self.stride,
+        #     border_mode="valid"
+        # )
+
+        output_in = cuda.dnn.dnn_conv(
             image,
             self.weights,
-            image_shape=image_shape,
-            filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
+            # image_shape=image_shape,
+            # filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
             subsample=self.stride,
             border_mode="valid"
         )
-        
+
         # output = output_in[
         #     :,
         #     :,
