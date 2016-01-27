@@ -97,6 +97,61 @@ def squared(target, prediction):
     return (target - prediction) ** 2
 
 
+def _closest_pair_distance_cell(target, prediction, n_pred=20, lambda_cpd=1.0, lambda_confidence=1.0):
+
+    n_pred = target.shape[0] // 6
+    
+    prediction_a = prediction[0:3]
+    prediction_b = prediction[3:6]
+    prediction_c = prediction[6]
+    
+    target_c = target[n_pred * 6]
+    target_reshape = target[0:n_pred * 6].reshape((-1, 6))
+    target_reshape = target_reshape[T.nonzero(T.gt(target_reshape, -1))].reshape((-1, 6))
+    target_a = target_reshape[:, 0:3]
+    target_b = target_reshape[:, 3:6]
+
+    prediction_a_sum_square = T.sum(prediction_a ** 2, axis=0, keepdims=True)
+    prediction_b_sum_square = T.sum(prediction_b ** 2, axis=0, keepdims=True)
+    target_a_sum_square = T.sum(target_a ** 2, axis=1, keepdims=True)
+    target_b_sum_square = T.sum(target_b ** 2, axis=1, keepdims=True)
+    
+    P_a = T.dot(prediction_a, target_a.T)
+    P_b = T.dot(prediction_b, target_b.T)
+
+    D_a = T.sqrt(prediction_a_sum_square + target_a_sum_square.T - 2 * P_a)
+    D_b = T.sqrt(prediction_b_sum_square + target_b_sum_square.T - 2 * P_b)
+    D = D_a + D_b
+
+    loss_cpd = ifelse(
+        T.gt(target_c, 0.5),
+        D.min(),
+        0.0
+    )
+
+    loss = lambda_cpd * loss_cpd  + lambda_confidence * T.nnet.binary_crossentropy(prediction_c, target_c)
+
+    return loss
+
+
+def _closest_pair_distance_volume(target, prediction, lambda_cpd=1.0, lambda_confidence=1.0):
+
+    n_cells = prediction.shape[0]
+    prediction_reshaped = prediction.reshape((n_cells * n_cells, -1))
+    target_reshaped = target.reshape((n_cells * n_cells, -1))
+    losses, updates = theano.map(_closest_pair_distance_cell, [prediction_reshaped, target_reshaped], non_sequences=[lambda_cpd, lambda_confidence])
+
+    return losses.sum()
+
+
+def closest_pair_distance_tensor4(target, prediction, lambda_cpd=1.0, lambda_confidence=1.0):
+
+    losses, updates = theano.map(_closest_pair_distance_volume, [prediction, target], non_sequences=[lambda_cpd, lambda_confidence])
+
+    return losses.reshape((-1, 1))
+
+
+
 def _closest_pair_distance_vector(target, prediction):
     """Return the closest pair distance between the `target` and
     the `predicition`.
