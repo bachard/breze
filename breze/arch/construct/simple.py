@@ -487,7 +487,7 @@ class Deconv2d(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width, n_inpt,
                  filter_height, filter_width,
-                 n_output, stride=(1, 1), padding=(0, 0),
+                 n_output, subsample=(1, 1), padding=(0, 0),
                  n_samples=None,
                  transfer='identity',
                  declare=None, name=None):
@@ -501,10 +501,10 @@ class Deconv2d(Layer):
         self.filter_height = filter_height
         self.filter_width = filter_width
         
-        self.output_height = filter_height + stride[0] * (inpt_height - 1) - 2 * padding[0]
-        self.output_width = filter_width + stride[1] * (inpt_width - 1) - 2 * padding[1]
+        self.output_height = filter_height + subsample[0] * (inpt_height - 1) - 2 * padding[0]
+        self.output_width = filter_width + subsample[1] * (inpt_width - 1) - 2 * padding[1]
 
-        self.stride = stride
+        self.subsample = subsample
         self.padding = padding
 
         self.transfer = transfer
@@ -519,35 +519,17 @@ class Deconv2d(Layer):
             self.n_inpt, self.n_output,
             self.filter_height, self.filter_width))
 
-        image_height = self.filter_height + self.stride[0] * (self.inpt_height - 1)
-        image_width = self.filter_width + self.stride[1] * (self.inpt_width - 1)
-        image_shape = (self.n_samples, self.n_output, image_height, image_width)
-        # output_in_height = ((self.output_height - self.filter_height + 2*(self.filter_height - 1)) / self.stride[0] + 1)
-        # output_in_width = ((self.output_width - self.filter_width + 2*(self.filter_width - 1)) / self.stride[1] + 1)
+        output_shape = (self.n_samples, self.n_inpt, self.output_height, self.output_width)
+        filter_shape = (self.n_inpt, self.n_output, self.filter_height, self.filter_width)
         
-        image = T.alloc(0., *image_shape)
-        output_in = T.nnet.conv.conv2d(
-            image,
-            self.weights,
-            image_shape=image_shape,
-            filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
-            subsample=self.stride,
-            border_mode="valid"
-        )
+        op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(
+            imshp=output_shape,
+            kshp=filter_shape,
+            border_mode=self.padding,
+            subsample=self.subsample)
         
-        # output = output_in[
-        #     :,
-        #     :,
-        #     output_in_height/2 - self.inpt_height/2:
-        #     output_in_height/2 + self.inpt_height/2 + self.inpt_height%2,
-        #     output_in_width/2 - self.inpt_width/2:
-        #     output_in_width/2 + self.inpt_width/2 + self.inpt_width%2
-        # ]
-        
-        self.output_in = theano.grad(output_in.sum(), wrt=image, known_grads={output_in: self.inpt})
-        if self.padding[0] > 0 and self.padding[1] > 0:
-            self.output_in = self.output_in[:, :, self.padding[0]:-self.padding[0], self.padding[1]:-self.padding[1]]
-        
+        self.output_in = op(self.weights, self.inpt, output_shape[2:])
+                
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
         
