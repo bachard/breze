@@ -613,7 +613,7 @@ class BatchNormalization(Layer):
 
     @training.setter
     def training(self, training):
-        self._training = training
+        self._training.set_value(training)
 
     def __init__(self, inpt, n_inpt,
                  n_samples,
@@ -633,7 +633,7 @@ class BatchNormalization(Layer):
 
         self.weighting_decrease = weighting_decrease
 
-        self._training = training
+        self._training = theano.shared(training)
 
         self.num_stability_cst = 1e-6
 
