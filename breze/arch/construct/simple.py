@@ -18,6 +18,7 @@ from breze.arch.util import lookup
 
 import numpy
 
+
 class AffineNonlinear(Layer):
 
     @property
@@ -106,6 +107,51 @@ class SupervisedLoss(Layer):
         self.total = self.sample_wise.mean()
 
 
+class Pad2d(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width, n_inpt,
+                 padding=(0, 0),
+                 n_samples=None,
+                 declare=None, name=None):
+
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.n_inpt = n_inpt
+        self.n_output = n_inpt
+
+        self.n_samples = n_samples
+
+        if isinstance(padding, int):
+            self.padding_left = self.padding_right = self.padding_top = self.padding_bottom = padding
+        elif len(padding) == 2:
+            self.padding_left = self.padding_right = padding[0]
+            self.padding_top = self.padding_bottom = padding[1]
+        elif len(padding) == 4:
+            self.padding_left = padding[0]
+            self.padding_top = padding[1]
+            self.padding_right = padding[2]
+            self.padding_bottom = padding[3]
+        else:
+            raise ValueError("padding is not set properly (either int, (int, int), (int, int, int, int)).")
+
+        self.output_height = inpt_height + self.padding_left + self.padding_right
+        self.output_width = inpt_width + self.padding_top + self.padding_bottom
+        print(self.inpt_height, self.output_height, self.padding_left)
+        super(Pad2d, self).__init__(declare, name)
+
+    def _forward(self):
+        self.output = T.alloc(0., self.inpt.shape[0], self.inpt.shape[1], self.output_height, self.output_width)
+
+        self.output = T.set_subtensor(
+            self.output[:, :,
+                self.padding_top:-self.padding_bottom if self.padding_bottom > 0 else None,
+                self.padding_left:-self.padding_right if self.padding_right > 0 else None],
+            self.inpt)
+
+
+
+
 class Conv2d(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width, n_inpt,
@@ -142,7 +188,8 @@ class Conv2d(Layer):
         if padding[0] > 0:
             self.inpt_height = inpt_height + 2*padding[0]
             self.inpt_width = inpt_width + 2*padding[1]
-            inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width) 
+            inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width)
+            print(inpt_shape)
             self.inpt = T.alloc(0., *inpt_shape)
             self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
 
@@ -340,11 +387,11 @@ class Dropout(Layer):
 
     @property
     def training(self):
-        return self._training
+        return self._training.get_value()
 
     @training.setter
     def training(self, training):
-        self._training = training
+        self._training.set_value(training)
 
     def __init__(self, inpt,
                  n_output,
@@ -366,7 +413,7 @@ class Dropout(Layer):
         self.n_output = n_output
 
         self.srng = RandomStreams(rng.randint(2**32))
-        self._training = training
+        self._training = theano.shared(training)
 
         self.rate = rate
 
@@ -487,7 +534,7 @@ class Deconv2d(Layer):
 
     def __init__(self, inpt, inpt_height, inpt_width, n_inpt,
                  filter_height, filter_width,
-                 n_output, stride=(1, 1), padding=(0, 0),
+                 n_output, subsample=(1, 1), padding=(0, 0),
                  n_samples=None,
                  transfer='identity',
                  declare=None, name=None):
@@ -501,10 +548,10 @@ class Deconv2d(Layer):
         self.filter_height = filter_height
         self.filter_width = filter_width
         
-        self.output_height = filter_height + stride[0] * (inpt_height - 1) - 2 * padding[0]
-        self.output_width = filter_width + stride[1] * (inpt_width - 1) - 2 * padding[1]
+        self.output_height = filter_height + subsample[0] * (inpt_height - 1) - 2 * padding[0]
+        self.output_width = filter_width + subsample[1] * (inpt_width - 1) - 2 * padding[1]
 
-        self.stride = stride
+        self.subsample = subsample
         self.padding = padding
 
         self.transfer = transfer
@@ -519,44 +566,17 @@ class Deconv2d(Layer):
             self.n_inpt, self.n_output,
             self.filter_height, self.filter_width))
 
-        image_height = self.filter_height + self.stride[0] * (self.inpt_height - 1)
-        image_width = self.filter_width + self.stride[1] * (self.inpt_width - 1)
-        image_shape = (self.n_samples, self.n_output, image_height, image_width)
-        # output_in_height = ((self.output_height - self.filter_height + 2*(self.filter_height - 1)) / self.stride[0] + 1)
-        # output_in_width = ((self.output_width - self.filter_width + 2*(self.filter_width - 1)) / self.stride[1] + 1)
-        
-        image = T.alloc(0., *image_shape)
-        # output_in = T.nnet.conv.conv2d(
-        #     image,
-        #     self.weights,
-        #     image_shape=image_shape,
-        #     filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
-        #     subsample=self.stride,
-        #     border_mode="valid"
-        # )
+        output_shape = (self.n_samples, self.n_output, self.output_height, self.output_width)
+        filter_shape = (self.n_inpt, self.n_output, self.filter_height, self.filter_width)
 
-        output_in = cuda.dnn.dnn_conv(
-            image,
-            self.weights,
-            # image_shape=image_shape,
-            # filter_shape=(self.n_inpt, self.n_output, self.filter_height, self.filter_width),
-            subsample=self.stride,
-            border_mode="valid"
-        )
-
-        # output = output_in[
-        #     :,
-        #     :,
-        #     output_in_height/2 - self.inpt_height/2:
-        #     output_in_height/2 + self.inpt_height/2 + self.inpt_height%2,
-        #     output_in_width/2 - self.inpt_width/2:
-        #     output_in_width/2 + self.inpt_width/2 + self.inpt_width%2
-        # ]
+        op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(
+            imshp=output_shape,
+            kshp=filter_shape,
+            border_mode=self.padding,
+            subsample=self.subsample)
         
-        self.output_in = theano.grad(output_in.sum(), wrt=image, known_grads={output_in: self.inpt})
-        if self.padding[0] > 0 and self.padding[1] > 0:
-            self.output_in = self.output_in[:, :, self.padding[0]:-self.padding[0], self.padding[1]:-self.padding[1]]
-        
+        self.output_in = op(self.weights, self.inpt, output_shape[2:])
+                
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
         
@@ -679,13 +699,12 @@ class BatchNormalization(Layer):
             self.std
         )
 
-        self.output_in = batch_normalization(
-            self.inpt,
-            self.scale,
-            self.shift,
-            mean,
-            std,
-            "low_mem"
+        self.output_in = ifelse(
+            T.gt(self.training, 0),
+            batch_normalization(self.inpt, self.scale, self.shift,
+                                mean, std, "low_mem"),
+            ((self.scale / T.sqrt(std**2 + self.num_stability_cst) * self.inpt +
+            (self.shift - (self.scale * mean) / T.sqrt(std**2 + self.num_stability_cst))))
         )
 
         f = lookup(self.transfer, _transfer)
@@ -767,7 +786,7 @@ class BatchNormalization2d(Layer):
 
         self._training = theano.shared(training)
 
-        self.num_stability_cst = 1e-6
+        self.num_stability_cst = 1e-4
 
         super(BatchNormalization2d, self).__init__(declare=declare, name=name)
 
@@ -819,7 +838,7 @@ class BatchNormalization2d(Layer):
         self.std.default_update = ifelse(
             T.gt(self.training, 0),
             (self.weighting_decrease*std
-             + (1 - self.weighting_decrease)*self.std),
+             + (1 - self.weighting_decrease) * self.std),
             self.std
         )
 
@@ -827,13 +846,12 @@ class BatchNormalization2d(Layer):
         mean = T.addbroadcast(mean, *axes)
         std = T.addbroadcast(std, *axes)
 
-        self.output_in = batch_normalization(
-            self.inpt,
-            self.scale,
-            self.shift,
-            mean,
-            std,
-            "low_mem"
+        self.output_in = ifelse(
+            T.gt(self.training, 0),
+            batch_normalization(self.inpt, self.scale, self.shift,
+                                mean, std, "low_mem"),
+            ((self.scale / T.sqrt(std**2 + self.num_stability_cst) * self.inpt +
+             (self.shift - (self.scale * mean) / T.sqrt(std**2 + self.num_stability_cst))))
         )
 
         f = lookup(self.transfer, _transfer)
