@@ -96,6 +96,30 @@ def squared(target, prediction):
         representing the pairwise distances."""
     return (target - prediction) ** 2
 
+def squared_tensor4(target, prediction):
+    """Return the element wise squared loss between the `target` and
+    the `prediction`.
+
+    Parameters
+    ----------
+
+    target : Theano variable
+        An tensor4 of arbitrary shape representing representing the targets.
+
+    prediction : Theano variable
+        An tensor4 of arbitrary shape representing representing the predictions.
+
+    Returns
+    -------
+
+    res : Theano variable
+        An array of the same shape as ``target`` and ``prediction``
+        representing the pairwise distances."""
+    
+    target = target.reshape((target.shape[0], -1))
+    prediction = prediction.reshape((prediction.shape[0], -1))
+    
+    return T.sqr(target - prediction)
 
 def _closest_pair_distance_cell(target, prediction, n_pred=20, lambda_cpd=1.0, lambda_confidence=1.0):
 
@@ -743,19 +767,45 @@ def drlim(push_margin, pull_margin, c_contrastive,
 drlim1 = drlim(1, 0, 0.5)
 
 
-def ebm_loss(push_margin, pull_margin, c_contrastive):
+def ebm_loss(pull_margin, push_margin, c_contrastive, reverse=False):
 
     def inner(target, distance):
-        
-        push = target * T.sqr(T.maximum(0, push_margin - distance))
-        pull = (1 - target) * T.sqr(T.maximum(0, distance - pull_margin))
+        if reverse:
+            target = 1 - target
+        pull = target * T.sqr(T.maximum(0, pull_margin - distance))
+        push = (1 - target) * T.sqr(T.maximum(0, distance - push_margin))
 
-        loss = pull + c_contrastive * push
+        loss = push + c_contrastive * pull
         return loss.reshape((-1, 1))
 
     return inner
 
-
 ebm_loss1 = ebm_loss(1, 0, 0.5)
 ebm_loss2 = ebm_loss(2, 0, 0.5)
+ebm_loss3 = ebm_loss(3, 0, 0.2)
 ebm_loss4 = ebm_loss(4, 0, 0.5)
+ebm_loss3_low = ebm_loss(3, 0, 0.08)
+ebm_loss3_001 = ebm_loss(3, 0, 0.01)
+ebm_loss3_0005 = ebm_loss(3, 0, 0.005)
+ebm_loss_init = ebm_loss(10, 0, 1.)
+ebm_loss_inv = ebm_loss(3, 0, 0.08, True)
+
+def ebm_linear_loss(pull_margin, push_margin, c_contrastive):
+
+    def inner(target, distance):
+        
+        pull = target * T.sqr(T.maximum(0, pull_margin * T.exp(target) - distance))
+        target = T.switch(target > 0, 1., 0.)
+        push = (1 - target) * T.sqr(T.maximum(0, distance - push_margin))
+
+        loss = push + c_contrastive * pull
+        return loss.reshape((-1, 1))
+
+    return inner
+
+ebm_linear_loss = ebm_linear_loss(3., 0, 0.08)
+
+def ebm_squared(target, distance):
+    loss = T.sqr(distance) + 0*target
+
+    return loss.reshape((-1, 1))
