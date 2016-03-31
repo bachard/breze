@@ -4,7 +4,7 @@ import numpy as np
 
 import theano
 import theano.tensor as T
-from theano.tensor.nnet import conv
+from theano.tensor.nnet import conv2d
 from theano.tensor.nnet.bn import batch_normalization
 from theano.tensor.signal import downsample
 from theano.ifelse import ifelse
@@ -186,12 +186,13 @@ class Conv2d(Layer):
         # and then use "valid" mode (what is done here)
         # or use "full" mode and then slice the output
         if padding[0] > 0:
-            self.inpt_height = inpt_height + 2*padding[0]
-            self.inpt_width = inpt_width + 2*padding[1]
-            inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width)
-            print(inpt_shape)
-            self.inpt = T.alloc(0., *inpt_shape)
-            self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
+            # self.inpt_height = inpt_height + 2*padding[0]
+            # self.inpt_width = inpt_width + 2*padding[1]
+            # inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width)
+            # print(name, inpt_shape)
+            # self.inpt = T.alloc(0., *inpt_shape)
+            # self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
+            self.border_mode = padding
 
         if not self.output_height > 0:
             raise ValueError('inpt height smaller than filter height')
@@ -206,17 +207,23 @@ class Conv2d(Layer):
             self.filter_height, self.filter_width))
         self.bias = self.declare((self.n_output,))
 
-        self.output_in = conv.conv2d(
+        self.output_in = conv2d(
             self.inpt,
             self.weights,
-            image_shape=(
+            input_shape=(
                 self.n_samples,
                 self.n_inpt,
                 self.inpt_height,
                 self.inpt_width
             ),
+            filter_shape=(
+                self.n_output,
+                self.n_inpt,
+                self.filter_height,
+                self.filter_width
+            ),
             subsample=self.subsample,
-            border_mode=self.border_mode,
+            border_mode=self.border_mode
         )
 
         f = lookup(self.transfer, _transfer)
@@ -478,7 +485,7 @@ class Upsample2d(Layer):
         self.output_height = inpt_height * upsample_height + self.padding_left + self.padding_right
         self.output_width = inpt_width * upsample_width + self.padding_top + self.padding_bottom
 
-        print(self.output_height, self.output_width, self.padding_top, self.inpt_height * self.upsample_height, self.padding_left, self.inpt_width * self.upsample_width)
+        print(name, self.output_height, self.output_width, self.padding_top, self.inpt_height * self.upsample_height, self.padding_left, self.inpt_width * self.upsample_width)
 
         self.n_output = n_output
 
