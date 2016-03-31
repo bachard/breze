@@ -100,11 +100,11 @@ def squared(target, prediction):
 def _closest_pair_distance_cell(target, prediction, n_pred=20, lambda_cpd=1.0, lambda_confidence=1.0):
 
     n_pred = target.shape[0] // 6
-    
+
     prediction_a = prediction[0:3]
     prediction_b = prediction[3:6]
     prediction_c = prediction[6]
-    
+
     target_c = target[n_pred * 6]
     target_reshape = target[0:n_pred * 6].reshape((-1, 6))
     target_reshape = target_reshape[T.nonzero(T.gt(target_reshape, -1))].reshape((-1, 6))
@@ -115,7 +115,7 @@ def _closest_pair_distance_cell(target, prediction, n_pred=20, lambda_cpd=1.0, l
     prediction_b_sum_square = T.sum(prediction_b ** 2, axis=0, keepdims=True)
     target_a_sum_square = T.sum(target_a ** 2, axis=1, keepdims=True)
     target_b_sum_square = T.sum(target_b ** 2, axis=1, keepdims=True)
-    
+
     P_a = T.dot(prediction_a, target_a.T)
     P_b = T.dot(prediction_b, target_b.T)
 
@@ -182,21 +182,21 @@ def _closest_pair_distance_vector(target, prediction):
 
     # filter target entries
     target = target[T.nonzero(T.gt(target, -1))].reshape((-1, 6))
-    
+
     prediction_a_sum_square = T.sum(prediction[:3] ** 2, axis=0, keepdims=True)
     prediction_b_sum_square = T.sum(prediction[3:] ** 2, axis=0, keepdims=True)
     target_a_sum_square = T.sum(target[:, :3] ** 2, axis=1, keepdims=True)
     target_b_sum_square = T.sum(target[:, 3:] ** 2, axis=1, keepdims=True)
-    
+
     P_a = T.dot(prediction[:3], target[:, :3].T)
     P_b = T.dot(prediction[3:], target[:, 3:].T)
-    
+
     D_a = T.sqrt(prediction_a_sum_square + target_a_sum_square.T - 2 * P_a)
     D_b = T.sqrt(prediction_b_sum_square + target_b_sum_square.T - 2 * P_b)
     D = D_a + D_b
-    
+
     loss = D.min()
-    
+
     return loss
 
 
@@ -280,7 +280,7 @@ def _modified_hausdorff_distance_matrix(target, prediction):
 
     prediction_sum_square = T.sum(prediction ** 2, axis=1, keepdims=True)
     target_sum_square = T.sum(target ** 2, axis=1, keepdims=True)
-    
+
     dot_prod = T.dot(prediction, target.T)
 
     distances = T.sqrt(prediction_sum_square + target_sum_square.T - 2 * dot_prod)
@@ -323,10 +323,10 @@ def modified_hausdorff_distance(target, prediction):
     -------
 
     res : Theano variable
-        An array of shape (n_samples, ) representing the MHD between the 
+        An array of shape (n_samples, ) representing the MHD between the
     target and the prediction
     """
-    
+
     print(target, prediction)
     distances, updates = theano.map(
         _modified_hausdorff_distance_matrix,
@@ -334,7 +334,7 @@ def modified_hausdorff_distance(target, prediction):
     )
 
     return distances.reshape((-1, 1))
-    
+
 
 def binary_hinge_loss(target, prediction):
     """Return the binary hinge loss between the ``target`` and
@@ -743,14 +743,14 @@ def drlim(push_margin, pull_margin, c_contrastive,
 drlim1 = drlim(1, 0, 0.5)
 
 
-def ebm_loss(push_margin, pull_margin, c_contrastive):
+def ebm_loss(pull_margin, push_margin, c_contrastive):
 
-    def inner(target, distance):
-        
-        push = target * T.sqr(T.maximum(0, push_margin - distance))
-        pull = (1 - target) * T.sqr(T.maximum(0, distance - pull_margin))
+    def inner(target, energy):
 
-        loss = pull + c_contrastive * push
+        pull = target * T.sqr(T.maximum(0, pull_margin - energy))
+        push = (1 - target) * T.sqr(T.maximum(0, energy - push_margin))
+
+        loss = push + c_contrastive * pull
         return loss.reshape((-1, 1))
 
     return inner
@@ -758,4 +758,26 @@ def ebm_loss(push_margin, pull_margin, c_contrastive):
 
 ebm_loss1 = ebm_loss(1, 0, 0.5)
 ebm_loss2 = ebm_loss(2, 0, 0.5)
+ebm_loss2_1 = ebm_loss(2, 0, 0.75)
+ebm_loss3 = ebm_loss(3, 0, 0.5)
+ebm_loss3_01 = ebm_loss(3, 0, 0.1)
+ebm_loss3_1 = ebm_loss(3, 0, 0.75)
 ebm_loss4 = ebm_loss(4, 0, 0.5)
+ebm_loss4_1 = ebm_loss(4, 0, 0.75)
+ebm_loss10_low = ebm_loss(3, 0, 0.08)
+ebm_loss_init = ebm_loss(10, 0, 1)
+
+def ebm_linear_loss(pull_margin, push_margin, c_contrastive):
+
+    def inner(target, energy):
+
+        pull = target * T.sqr(T.maximum(0, pull_margin * target - energy))
+        # target = T.switch(target > 0, 1, 0)
+        push = (1 - target) * T.sqr(T.maximum(0, energy - push_margin * target))
+
+        loss = push + c_contrastive * pull
+        return loss.reshape((-1, 1))
+
+    return inner
+
+ebm_linear_loss = ebm_linear_loss(3, 10, 0.08)
