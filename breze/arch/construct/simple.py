@@ -137,7 +137,6 @@ class Pad2d(Layer):
 
         self.output_height = inpt_height + self.padding_left + self.padding_right
         self.output_width = inpt_width + self.padding_top + self.padding_bottom
-        print(self.inpt_height, self.output_height, self.padding_left)
         super(Pad2d, self).__init__(declare, name)
 
     def _forward(self):
@@ -150,6 +149,45 @@ class Pad2d(Layer):
             self.inpt)
 
 
+class Crop2d(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width, n_inpt,
+                 cropping=(0, 0),
+                 n_samples=None,
+                 declare=None, name=None):
+
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.n_inpt = n_inpt
+        self.n_output = n_inpt
+
+        self.n_samples = n_samples
+
+        if isinstance(cropping, int):
+            self.cropping_left = self.cropping_right = self.cropping_top = self.cropping_bottom = cropping
+        elif len(cropping) == 2:
+            self.cropping_left = self.cropping_right = cropping[0]
+            self.cropping_top = self.cropping_bottom = cropping[1]
+        elif len(cropping) == 4:
+            self.cropping_left = cropping[0]
+            self.cropping_top = cropping[1]
+            self.cropping_right = cropping[2]
+            self.cropping_bottom = cropping[3]
+        else:
+            raise ValueError("cropping is not set properly (either int, (int, int), (int, int, int, int)).")
+
+        self.output_height = inpt_height - self.cropping_left - self.cropping_right
+        self.output_width = inpt_width - self.cropping_top - self.cropping_bottom
+        super(Crop2d, self).__init__(declare, name)
+
+    def _forward(self):
+        self.output = self.inpt[
+            :, 
+            :,
+            self.cropping_top:-self.cropping_bottom if self.cropping_bottom > 0 else None,
+            self.cropping_left:-self.cropping_right if self.cropping_right > 0 else None
+        ]
 
 
 class Conv2d(Layer):
@@ -186,6 +224,7 @@ class Conv2d(Layer):
         # and then use "valid" mode (what is done here)
         # or use "full" mode and then slice the output
         if padding[0] > 0:
+<<<<<<< HEAD
             # self.inpt_height = inpt_height + 2*padding[0]
             # self.inpt_width = inpt_width + 2*padding[1]
             # inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width)
@@ -193,6 +232,13 @@ class Conv2d(Layer):
             # self.inpt = T.alloc(0., *inpt_shape)
             # self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
             self.border_mode = padding
+=======
+            self.inpt_height = inpt_height + 2*padding[0]
+            self.inpt_width = inpt_width + 2*padding[1]
+            inpt_shape = (n_samples, n_inpt, self.inpt_height, self.inpt_width)
+            self.inpt = T.alloc(0., *inpt_shape)
+            self.inpt = T.set_subtensor(self.inpt[:, :, padding[0]:-padding[0], padding[1]:-padding[1]], inpt)
+>>>>>>> ea41158cdfa6ea3995df44943b46d56b17419530
 
         if not self.output_height > 0:
             raise ValueError('inpt height smaller than filter height')
@@ -485,8 +531,11 @@ class Upsample2d(Layer):
         self.output_height = inpt_height * upsample_height + self.padding_left + self.padding_right
         self.output_width = inpt_width * upsample_width + self.padding_top + self.padding_bottom
 
+<<<<<<< HEAD
         print(name, self.output_height, self.output_width, self.padding_top, self.inpt_height * self.upsample_height, self.padding_left, self.inpt_width * self.upsample_width)
 
+=======
+>>>>>>> ea41158cdfa6ea3995df44943b46d56b17419530
         self.n_output = n_output
 
         super(Upsample2d, self).__init__(declare=declare, name=name)

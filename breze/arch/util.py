@@ -181,7 +181,7 @@ def gnumpy_func_wrap(f):
         else:
             # TODO: check for CudaNdArray instance instead
             if not isinstance(res, (float, np.ndarray)):
-                res = gput.cudandarray_to_garray(res)
+                res = gput.cudandarray_to_garray(res, copyif=True)
         return res
     return inner
 
